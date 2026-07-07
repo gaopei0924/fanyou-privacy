@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>飯友 · Email 確認</title>
+<style>
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#0A0F1E; font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif; color:#F6F1E8; text-align:center; }
+  .card { max-width:340px; padding:40px 28px; }
+  .icon { font-size:56px; margin:0; }
+  h1 { font-size:22px; margin:16px 0 8px; color:#FFC86B; }
+  p { font-size:15px; line-height:1.8; color:#A3ADC2; margin:0; }
+  .hint { margin-top:28px; font-size:12px; opacity:.7; }
+</style>
+</head>
+<body>
+<div class="card" id="ok">
+  <p class="icon">✅</p>
+  <h1>Email 確認成功！</h1>
+  <p>你的帳號已啟用。<br />請回到「<strong style="color:#F6F1E8">飯友</strong>」App，<br />用剛註冊的帳號登入即可。</p>
+  <p class="hint">這個頁面可以直接關閉</p>
+</div>
+<div class="card" id="err" style="display:none">
+  <p class="icon">⚠️</p>
+  <h1>連結已失效</h1>
+  <p id="errmsg">確認連結可能已過期或已被使用。<br />請回到 App 重新註冊或登入試試。</p>
+  <p class="hint">這個頁面可以直接關閉</p>
+</div>
+<script>
+  // Supabase 驗證失敗時會在 # 帶 error 參數
+  if (/error=/.test(location.hash)) {
+    document.getElementById('ok').style.display = 'none';
+    document.getElementById('err').style.display = 'block';
+  }
+</script>
+</body>
+</html>
