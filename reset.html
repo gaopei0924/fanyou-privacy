@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>飯友 · 重設密碼</title>
+<style>
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#0A0F1E; font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif; color:#F6F1E8; }
+  .card { width:min(92vw,360px); padding:40px 24px; text-align:center; }
+  .icon { font-size:52px; margin:0; }
+  h1 { font-size:21px; margin:14px 0 6px; color:#FFC86B; }
+  p { font-size:14px; line-height:1.8; color:#A3ADC2; margin:0 0 20px; }
+  input { width:100%; box-sizing:border-box; margin-bottom:12px; padding:13px 16px; font-size:15px; color:#F6F1E8; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); border-radius:14px; outline:none; }
+  input:focus { border-color:rgba(255,200,107,.5); }
+  button { width:100%; padding:14px; font-size:15px; font-weight:700; color:#3A2A14; background:linear-gradient(135deg,#FFE3A8,#FFC86B 55%,#E8973C); border:none; border-radius:999px; cursor:pointer; }
+  button:disabled { opacity:.5; }
+  .msg { margin-top:14px; font-size:13px; min-height:18px; }
+  .msg.ok { color:#8BD17C; } .msg.err { color:#FF8B6B; }
+  .hint { margin-top:24px; font-size:12px; color:#A3ADC2; opacity:.7; }
+</style>
+</head>
+<body>
+<div class="card" id="form" style="display:none">
+  <p class="icon">🔑</p>
+  <h1>設定新密碼</h1>
+  <p>為你的飯友帳號設定一組新密碼</p>
+  <input id="pw1" type="password" placeholder="新密碼(至少 6 碼)" autocomplete="new-password" />
+  <input id="pw2" type="password" placeholder="再輸入一次" autocomplete="new-password" />
+  <button id="go">更新密碼</button>
+  <div class="msg" id="msg"></div>
+</div>
+<div class="card" id="done" style="display:none">
+  <p class="icon">✅</p>
+  <h1>密碼已更新！</h1>
+  <p>請回到「<strong style="color:#F6F1E8">飯友</strong>」App，<br />用新密碼登入。</p>
+  <p class="hint">這個頁面可以直接關閉</p>
+</div>
+<div class="card" id="bad" style="display:none">
+  <p class="icon">⚠️</p>
+  <h1>連結已失效</h1>
+  <p>重設連結可能已過期或已被使用。<br />請回到 App 的登入頁，<br />重新點「忘記密碼」寄一封新的。</p>
+  <p class="hint">這個頁面可以直接關閉</p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+  // anon key 為公開金鑰(App 內同樣內嵌),安全性由 RLS 保障
+  const sb = supabase.createClient(
+    'https://whyiptfssvynnkihtjjn.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoeWlwdGZzc3Z5bm5raWh0ampuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMjEzNzYsImV4cCI6MjA5ODc5NzM3Nn0.rZ00hxH69_f7tlOxusWsLuNDmkxARJrhrKdAHOPj_L0'
+  )
+  const $ = (id) => document.getElementById(id)
+  const show = (id) => { for (const s of ['form','done','bad']) $(s).style.display = s===id ? '' : 'none' }
+
+  // 從重設信連結開啟時,URL # 會帶 recovery token,SDK 會自動建立 session
+  ;(async () => {
+    // 給 SDK 一點時間消化 URL hash
+    await new Promise(r => setTimeout(r, 400))
+    const { data: { session } } = await sb.auth.getSession()
+    show(session ? 'form' : 'bad')
+  })()
+
+  $('go').onclick = async () => {
+    const p1 = $('pw1').value, p2 = $('pw2').value, msg = $('msg')
+    msg.className = 'msg'
+    if (p1.length < 6) { msg.textContent = '密碼至少 6 碼'; msg.className = 'msg err'; return }
+    if (p1 !== p2) { msg.textContent = '兩次輸入不一致'; msg.className = 'msg err'; return }
+    $('go').disabled = true
+    const { error } = await sb.auth.updateUser({ password: p1 })
+    $('go').disabled = false
+    if (error) { msg.textContent = error.message; msg.className = 'msg err'; return }
+    show('done')
+  }
+</script>
+</body>
+</html>
