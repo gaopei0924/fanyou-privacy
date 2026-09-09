@@ -20,6 +20,11 @@
 </style>
 </head>
 <body>
+<div class="card" id="wait">
+  <p class="icon">⏳</p>
+  <h1>驗證連結中…</h1>
+  <p class="hint">請稍候</p>
+</div>
 <div class="card" id="form" style="display:none">
   <p class="icon">🔑</p>
   <h1>設定新密碼</h1>
@@ -49,13 +54,30 @@
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoeWlwdGZzc3Z5bm5raWh0ampuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMjEzNzYsImV4cCI6MjA5ODc5NzM3Nn0.rZ00hxH69_f7tlOxusWsLuNDmkxARJrhrKdAHOPj_L0'
   )
   const $ = (id) => document.getElementById(id)
-  const show = (id) => { for (const s of ['form','done','bad']) $(s).style.display = s===id ? '' : 'none' }
+  const show = (id) => { for (const s of ['wait','form','done','bad']) $(s).style.display = s===id ? '' : 'none' }
 
-  // 從重設信連結開啟時,URL # 會帶 recovery token,SDK 會自動建立 session
+  // 從重設信連結開啟時,URL # 會帶 recovery token,SDK 的 detectSessionInUrl
+  // 會「非同步」把它換成 session —— 不是同步的,所以不能讀完就判。
   ;(async () => {
-    // 給 SDK 一點時間消化 URL hash
-    await new Promise(r => setTimeout(r, 400))
-    const { data: { session } } = await sb.auth.getSession()
+    // ① 連結本身就帶錯誤(過期或已使用過)時,Supabase 會直接把
+    //    #error=access_denied&error_code=otp_expired&... 放進 hash。
+    //    這種情況等下去也不會有 session,立刻判失敗,別讓使用者乾等十秒。
+    if (new URLSearchParams(location.hash.slice(1)).get('error')) { show('bad'); return }
+
+    // ② 正常情況:等 SDK 真的把 session 建立起來。
+    //    ⚠️ 不可以再改回「固定 setTimeout 之後查一次」——
+    //    舊版寫死 400ms,手機慢一點 SDK 還沒消化完就被判成「連結已失效」,
+    //    而連結其實是好的。使用者只會覺得壞掉、放棄,然後給一星。
+    const session = await new Promise((resolve) => {
+      let settled = false
+      const finish = (s) => { if (!settled) { settled = true; resolve(s) } }
+      // 主要路徑:SDK 消化完 hash 會發出事件(初次會先發一次 null,故要判 s)
+      sb.auth.onAuthStateChange((_e, s) => { if (s) finish(s) })
+      // 補位:也可能在監聽掛上之前就已經完成了
+      sb.auth.getSession().then(({ data: { session } }) => { if (session) finish(session) })
+      // 保底:真的等不到才判失敗(慢速網路下 SDK 初始化也要時間)
+      setTimeout(() => finish(null), 10000)
+    })
     show(session ? 'form' : 'bad')
   })()
 
