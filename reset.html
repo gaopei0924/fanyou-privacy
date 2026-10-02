@@ -3,95 +3,18 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>飯友 · 重設密碼</title>
-<style>
-  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#0A0F1E; font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif; color:#F6F1E8; }
-  .card { width:min(92vw,360px); padding:40px 24px; text-align:center; }
-  .icon { font-size:52px; margin:0; }
-  h1 { font-size:21px; margin:14px 0 6px; color:#FFC86B; }
-  p { font-size:14px; line-height:1.8; color:#A3ADC2; margin:0 0 20px; }
-  input { width:100%; box-sizing:border-box; margin-bottom:12px; padding:13px 16px; font-size:15px; color:#F6F1E8; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); border-radius:14px; outline:none; }
-  input:focus { border-color:rgba(255,200,107,.5); }
-  button { width:100%; padding:14px; font-size:15px; font-weight:700; color:#3A2A14; background:linear-gradient(135deg,#FFE3A8,#FFC86B 55%,#E8973C); border:none; border-radius:999px; cursor:pointer; }
-  button:disabled { opacity:.5; }
-  .msg { margin-top:14px; font-size:13px; min-height:18px; }
-  .msg.ok { color:#8BD17C; } .msg.err { color:#FF8B6B; }
-  .hint { margin-top:24px; font-size:12px; color:#A3ADC2; opacity:.7; }
-</style>
+<title>重設飯友密碼 · Reset your Fanyou password</title>
+<!-- 2026-10-02:飯友的法律頁與落地頁已搬到 https://tenfoldwuji.com/fanyou/reset(App 內所有連結都指向那裡)。
+     這裡只留轉址,避免舊網址(GitHub Pages)上的過期內容被讀到。
+     保留 ?query 與 #hash:邀請碼(?join=)與 Supabase 驗證/重設密碼的 token 都放在網址上。 -->
+<link rel="canonical" href="https://tenfoldwuji.com/fanyou/reset" />
+<meta name="robots" content="noindex" />
+<meta http-equiv="refresh" content="0; url=https://tenfoldwuji.com/fanyou/reset" />
+<script>location.replace('https://tenfoldwuji.com/fanyou/reset' + location.search + location.hash)</script>
+<style>body{font-family:-apple-system,"Noto Sans TC",system-ui,sans-serif;max-width:560px;margin:15vh auto;padding:0 20px;line-height:1.7;color-scheme:light dark}</style>
 </head>
 <body>
-<div class="card" id="wait">
-  <p class="icon">⏳</p>
-  <h1>驗證連結中…</h1>
-  <p class="hint">請稍候</p>
-</div>
-<div class="card" id="form" style="display:none">
-  <p class="icon">🔑</p>
-  <h1>設定新密碼</h1>
-  <p>為你的飯友帳號設定一組新密碼</p>
-  <input id="pw1" type="password" placeholder="新密碼(至少 8 碼,含英文與數字)" autocomplete="new-password" />
-  <input id="pw2" type="password" placeholder="再輸入一次" autocomplete="new-password" />
-  <button id="go">更新密碼</button>
-  <div class="msg" id="msg"></div>
-</div>
-<div class="card" id="done" style="display:none">
-  <p class="icon">✅</p>
-  <h1>密碼已更新！</h1>
-  <p>請回到「<strong style="color:#F6F1E8">飯友</strong>」App，<br />用新密碼登入。</p>
-  <p class="hint">這個頁面可以直接關閉</p>
-</div>
-<div class="card" id="bad" style="display:none">
-  <p class="icon">⚠️</p>
-  <h1>連結已失效</h1>
-  <p>重設連結可能已過期或已被使用。<br />請回到 App 的登入頁，<br />重新點「忘記密碼」寄一封新的。</p>
-  <p class="hint">這個頁面可以直接關閉</p>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script>
-  // anon key 為公開金鑰(App 內同樣內嵌),安全性由 RLS 保障
-  const sb = supabase.createClient(
-    'https://whyiptfssvynnkihtjjn.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoeWlwdGZzc3Z5bm5raWh0ampuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMjEzNzYsImV4cCI6MjA5ODc5NzM3Nn0.rZ00hxH69_f7tlOxusWsLuNDmkxARJrhrKdAHOPj_L0'
-  )
-  const $ = (id) => document.getElementById(id)
-  const show = (id) => { for (const s of ['wait','form','done','bad']) $(s).style.display = s===id ? '' : 'none' }
-
-  // 從重設信連結開啟時,URL # 會帶 recovery token,SDK 的 detectSessionInUrl
-  // 會「非同步」把它換成 session —— 不是同步的,所以不能讀完就判。
-  ;(async () => {
-    // ① 連結本身就帶錯誤(過期或已使用過)時,Supabase 會直接把
-    //    #error=access_denied&error_code=otp_expired&... 放進 hash。
-    //    這種情況等下去也不會有 session,立刻判失敗,別讓使用者乾等十秒。
-    if (new URLSearchParams(location.hash.slice(1)).get('error')) { show('bad'); return }
-
-    // ② 正常情況:等 SDK 真的把 session 建立起來。
-    //    ⚠️ 不可以再改回「固定 setTimeout 之後查一次」——
-    //    舊版寫死 400ms,手機慢一點 SDK 還沒消化完就被判成「連結已失效」,
-    //    而連結其實是好的。使用者只會覺得壞掉、放棄,然後給一星。
-    const session = await new Promise((resolve) => {
-      let settled = false
-      const finish = (s) => { if (!settled) { settled = true; resolve(s) } }
-      // 主要路徑:SDK 消化完 hash 會發出事件(初次會先發一次 null,故要判 s)
-      sb.auth.onAuthStateChange((_e, s) => { if (s) finish(s) })
-      // 補位:也可能在監聽掛上之前就已經完成了
-      sb.auth.getSession().then(({ data: { session } }) => { if (session) finish(session) })
-      // 保底:真的等不到才判失敗(慢速網路下 SDK 初始化也要時間)
-      setTimeout(() => finish(null), 10000)
-    })
-    show(session ? 'form' : 'bad')
-  })()
-
-  $('go').onclick = async () => {
-    const p1 = $('pw1').value, p2 = $('pw2').value, msg = $('msg')
-    msg.className = 'msg'
-    if (p1.length < 8 || !/[A-Za-z]/.test(p1) || !/\d/.test(p1)) { msg.textContent = '密碼至少 8 碼,且需同時包含英文與數字'; msg.className = 'msg err'; return }
-    if (p1 !== p2) { msg.textContent = '兩次輸入不一致'; msg.className = 'msg err'; return }
-    $('go').disabled = true
-    const { error } = await sb.auth.updateUser({ password: p1 })
-    $('go').disabled = false
-    if (error) { msg.textContent = error.message; msg.className = 'msg err'; return }
-    show('done')
-  }
-</script>
+<p>此頁面已搬到 <a href="https://tenfoldwuji.com/fanyou/reset">https://tenfoldwuji.com/fanyou/reset</a>。</p>
+<p>This page has moved to <a href="https://tenfoldwuji.com/fanyou/reset">https://tenfoldwuji.com/fanyou/reset</a>.</p>
 </body>
 </html>
